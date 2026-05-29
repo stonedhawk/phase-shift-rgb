@@ -6,6 +6,7 @@ export interface DeathEvent {
   activeColor: string;
   timeAlive: number; // in milliseconds
   timestamp: number;
+  sessionId: string;
 }
 
 export interface LevelCompleteEvent {
@@ -14,6 +15,7 @@ export interface LevelCompleteEvent {
   totalTime: number; // in milliseconds
   phaseShiftCount: number;
   timestamp: number;
+  sessionId: string;
 }
 
 export type TelemetryEvent = DeathEvent | LevelCompleteEvent;
