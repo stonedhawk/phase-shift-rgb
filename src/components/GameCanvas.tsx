@@ -108,6 +108,8 @@ export const GameCanvas: React.FC = () => {
       <div className="relative group overflow-hidden rounded-2xl border-4 border-slate-950 shadow-inner w-full">
         <canvas
           ref={canvasRef}
+          width={800}
+          height={600}
           className="block w-full max-w-[800px] aspect-[4/3] bg-slate-950 transition-all duration-300 group-hover:shadow-[0_0_20px_rgba(99,102,241,0.15)]"
         />
         {/* Dynamic Scanline overlay for arcade visual aesthetic */}
