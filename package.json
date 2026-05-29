@@ -26,8 +26,10 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
+    "gifshot": "^0.4.5",
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
+    "puppeteer": "^25.1.0",
     "tailwindcss": "^4",
     "ts-jest": "^29.4.11",
     "typescript": "^5"
