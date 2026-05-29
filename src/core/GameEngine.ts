@@ -2,9 +2,11 @@ import { Player } from './entities/Player';
 import { InputManager } from './input/InputManager';
 import { LevelParser, LevelData } from './level/LevelParser';
 import { Renderer } from './render/Renderer';
-import { resolveCollision } from './math/Physics';
+import { resolveCollisionX, resolveCollisionY } from './math/Physics';
+import { isColliding } from './math/AABB';
 import { canCollide } from './logic/CollisionMatrix';
 import { ColorState } from './types/Chromatic';
+import { GameState } from './logic/GameState';
 
 export interface GameEngineOptions {
   canvas: HTMLCanvasElement;
@@ -22,6 +24,7 @@ export class GameEngine {
   public player: Player;
   public inputManager: InputManager;
   public level: LevelData;
+  public state: GameState = GameState.START;
 
   // Target 60 FPS (approx 16.67ms per frame)
   public readonly targetFps = 60;
@@ -29,22 +32,25 @@ export class GameEngine {
   public totalTime = 0;
   public ticks = 0;
 
-  // Default Stage JSON data
+  // Stage JSON data containing SOLIDS, HAZARDS, and GOAL
   private static readonly TEST_LEVEL_SCHEMA = JSON.stringify({
     spawnX: 100,
     spawnY: 100,
     platforms: [
-      // Bottom border boundaries
-      { x: 0, y: 560, width: 800, height: 40, colorState: 'RED' },
+      // Bottom border boundaries (RED)
+      { x: 0, y: 560, width: 800, height: 40, colorState: 'RED', type: 'SOLID' },
       
-      // Floating puzzle layers
-      { x: 150, y: 440, width: 150, height: 20, colorState: 'BLUE' },
-      { x: 500, y: 440, width: 150, height: 20, colorState: 'GREEN' },
-      { x: 300, y: 320, width: 200, height: 20, colorState: 'RED' },
+      // Floating solid platform chunks
+      { x: 150, y: 440, width: 150, height: 20, colorState: 'BLUE', type: 'SOLID' },
+      { x: 500, y: 440, width: 150, height: 20, colorState: 'GREEN', type: 'SOLID' },
+      { x: 300, y: 320, width: 200, height: 20, colorState: 'RED', type: 'SOLID' },
       
-      // Left and right neutral side ledges
-      { x: 0, y: 220, width: 100, height: 20, colorState: 'GREEN' },
-      { x: 700, y: 220, width: 100, height: 20, colorState: 'BLUE' }
+      // Hazardous spike layers (RED) - player will dissolve on touch
+      { x: 350, y: 540, width: 100, height: 20, colorState: 'RED', type: 'HAZARD' },
+      
+      // Goal Portal and supporting ledge (BLUE)
+      { x: 720, y: 160, width: 50, height: 60, colorState: 'BLUE', type: 'GOAL' },
+      { x: 700, y: 220, width: 100, height: 20, colorState: 'BLUE', type: 'SOLID' }
     ]
   });
 
@@ -134,41 +140,77 @@ export class GameEngine {
    * Update game logic with a deterministic fixed timestep
    */
   private update(dt: number) {
-    // 1. Update player physics integration
-    this.player.update(dt, this.inputManager.state);
+    // 1. Manage State Machine transitions (Space/Jump bar restarts transitions)
+    if (this.state !== GameState.PLAYING) {
+      if (this.inputManager.state.jump) {
+        // Reset player state to defaults on transition to PLAYING
+        this.player.x = this.level.spawnX;
+        this.player.y = this.level.spawnY;
+        this.player.vx = 0;
+        this.player.vy = 0;
+        this.player.isGrounded = false;
+        this.player.colorState = ColorState.RED;
+        this.player.prevX = this.level.spawnX;
+        this.player.prevY = this.level.spawnY;
+        this.state = GameState.PLAYING;
+        console.log('[GameEngine] Transitioned to PLAYING state.');
+      }
+      return; // Skip physical movement loops if not in PLAYING state
+    }
 
-    // Reset grounded flag before resolving environmental obstacles
+    // 2. Perform Split-Axis Collision Resolution
+
+    // A. Resolve Horizontal Axis (X)
+    this.player.updateX(dt, this.inputManager.state);
+
+    this.level.platforms.forEach((platform) => {
+      if (platform.type === 'SOLID' && canCollide(this.player.colorState, platform.colorState)) {
+        const res = resolveCollisionX(this.player, this.player, platform);
+        if (res.resolved) {
+          this.player.x = res.pos.x;
+          this.player.vx = res.vel.vx;
+        }
+      }
+    });
+
+    // B. Resolve Vertical Axis (Y)
+    this.player.updateY(dt, this.inputManager.state);
+    
+    // Reset grounded flag before vertical sweep
     this.player.isGrounded = false;
 
-    // 2. Perform collision sweeps and resolution against active platform elements
     this.level.platforms.forEach((platform) => {
-      // Check collision matrix rules (can collide only if player and platform color mismatch)
-      if (canCollide(this.player.colorState, platform.colorState)) {
-        const res = resolveCollision(this.player, this.player, platform);
+      if (platform.type === 'SOLID' && canCollide(this.player.colorState, platform.colorState)) {
+        const res = resolveCollisionY(this.player, this.player, platform);
         if (res.resolved) {
-          // Adjust physical entity markers
-          this.player.x = res.pos.x;
           this.player.y = res.pos.y;
-          this.player.vx = res.vel.vx;
           this.player.vy = res.vel.vy;
 
-          // If resolved vertically upward, player has landed on floor
-          if (res.axis === 'y' && res.pos.y < platform.y) {
+          // If pushed upward, the player has landed on top of this platform
+          if (res.pos.y < platform.y) {
             this.player.isGrounded = true;
           }
         }
       }
     });
 
+    // 3. Perform Hazard / Goal Overlap Checks
+    this.level.platforms.forEach((platform) => {
+      if (isColliding(this.player, platform)) {
+        if (platform.type === 'HAZARD') {
+          this.state = GameState.DEAD;
+          console.log('[GameEngine] Player touched HAZARD spike! Transitioned to DEAD.');
+        } else if (platform.type === 'GOAL') {
+          this.state = GameState.VICTORY;
+          console.log('[GameEngine] Player touched GOAL portal! Transitioned to VICTORY.');
+        }
+      }
+    });
+
     // Screen wrapping bounds fallback to prevent player falling infinitely out of grid
     if (this.player.y > this.canvas.height + 200) {
-      this.player.x = this.level.spawnX;
-      this.player.y = this.level.spawnY;
-      this.player.vx = 0;
-      this.player.vy = 0;
-      this.player.isGrounded = false;
-      this.player.colorState = ColorState.RED;
-      console.log('[GameEngine] Player fell off stage. Respawn triggered.');
+      this.state = GameState.DEAD;
+      console.log('[GameEngine] Player fell off stage boundaries. Transitioned to DEAD.');
     }
   }
 
@@ -176,6 +218,6 @@ export class GameEngine {
    * Render screen updates with decoupled visual interpolation factor
    */
   private render(interpolation: number) {
-    Renderer.draw(this.ctx, this.player, this.level, interpolation);
+    Renderer.draw(this.ctx, this.player, this.level, interpolation, this.state);
   }
 }

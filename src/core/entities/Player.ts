@@ -36,9 +36,16 @@ export class Player implements AABB {
    * @param inputState Binary active inputs mapping
    */
   public update(dt: number, inputState: InputState) {
-    // Cache current physical coordinates before positional updates for decoupled renderer visual interpolation
+    this.updateX(dt, inputState);
+    this.updateY(dt, inputState);
+  }
+
+  /**
+   * Run X-axis Euler integration, cache inter-frame position, and handle state switches.
+   */
+  public updateX(dt: number, inputState: InputState) {
+    // Cache current physical coordinates before updates for visual interpolation
     this.prevX = this.x;
-    this.prevY = this.y;
 
     // Reset jump cut-off flag when grounded
     if (this.isGrounded) {
@@ -73,6 +80,17 @@ export class Player implements AABB {
       this.vx = -PhysicsConfig.TERMINAL_VELOCITY_X;
     }
 
+    // Apply horizontal integration
+    this.x += this.vx * dt;
+  }
+
+  /**
+   * Run Y-axis Euler integration, cache inter-frame position, apply gravity and jump physics.
+   */
+  public updateY(dt: number, inputState: InputState) {
+    // Cache Y for decoupled visual interpolation
+    this.prevY = this.y;
+
     // 3. Vertical movement logic
     // Apply gravity force
     this.vy += PhysicsConfig.GRAVITY * dt;
@@ -97,8 +115,7 @@ export class Player implements AABB {
       this.hasJumpBeenCut = false;
     }
 
-    // 4. Update coordinates using integrated velocities
-    this.x += this.vx * dt;
+    // Apply vertical integration
     this.y += this.vy * dt;
   }
 

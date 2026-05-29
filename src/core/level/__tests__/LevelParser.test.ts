@@ -23,6 +23,7 @@ describe('LevelParser Schema Loading', () => {
       width: 200,
       height: 20,
       colorState: ColorState.RED,
+      type: 'SOLID',
     });
   });
 

@@ -6,6 +6,7 @@ export interface PlatformData {
   width: number;
   height: number;
   colorState: ColorState;
+  type: 'SOLID' | 'HAZARD' | 'GOAL';
 }
 
 export interface LevelData {
@@ -47,12 +48,18 @@ export class LevelParser {
         throw new Error(`Invalid colorState '${p.colorState}' at index ${index}`);
       }
 
+      const type = p.type ?? 'SOLID';
+      if (type !== 'SOLID' && type !== 'HAZARD' && type !== 'GOAL') {
+        throw new Error(`Invalid platform type '${p.type}' at index ${index}`);
+      }
+
       return {
         x: p.x,
         y: p.y,
         width: p.width,
         height: p.height,
         colorState,
+        type: type as 'SOLID' | 'HAZARD' | 'GOAL',
       };
     });
 
