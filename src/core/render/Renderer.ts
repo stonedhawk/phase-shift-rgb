@@ -3,6 +3,7 @@ import { LevelData, PlatformData } from '../level/LevelParser';
 import { ColorState } from '../types/Chromatic';
 import { GameState } from '../logic/GameState';
 import { Camera } from './Camera';
+import { ParticlePool } from './ParticlePool';
 
 export class Renderer {
   // Hex color constants for premium retro-arcade glow styling (shadows removed for massive CPU gain)
@@ -25,6 +26,7 @@ export class Renderer {
    * @param interpolation Linear fractional factor [0, 1] representing tick offsets
    * @param gameState Current game loop state machine status
    * @param camera Tracking camera system viewport
+   * @param particles Pre-allocated Particle Object Pool
    */
   public static draw(
     ctx: CanvasRenderingContext2D,
@@ -32,7 +34,8 @@ export class Renderer {
     level: LevelData,
     interpolation: number,
     gameState: GameState = GameState.PLAYING,
-    camera?: Camera
+    camera?: Camera,
+    particles?: ParticlePool
   ) {
     const width = ctx.canvas ? ctx.canvas.width : 800;
     const height = ctx.canvas ? ctx.canvas.height : 600;
@@ -57,6 +60,11 @@ export class Renderer {
     // 3. Draw Player (Only if not dead / in victory screens, or draw faded)
     if (gameState === GameState.PLAYING || gameState === GameState.VICTORY) {
       this.drawPlayer(ctx, player, interpolation);
+    }
+
+    // 3.5. Draw active pool particles (scrolls with world space)
+    if (particles) {
+      this.drawParticles(ctx, particles);
     }
 
     // Restore coordinate transformations to draw static overlays
@@ -223,6 +231,18 @@ export class Renderer {
       ctx.fillText('PRESS [ENTER] TO REPLAY FROM START', width / 2, height / 2 + 50);
     }
 
+    ctx.restore();
+  }
+
+  private static drawParticles(ctx: CanvasRenderingContext2D, pool: ParticlePool) {
+    ctx.save();
+    pool.particles.forEach((p) => {
+      if (p.active) {
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.life / p.maxLife; // Fade out life decay
+        ctx.fillRect(p.x, p.y, 4, 4);
+      }
+    });
     ctx.restore();
   }
 }

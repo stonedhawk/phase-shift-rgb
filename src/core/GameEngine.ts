@@ -1,6 +1,6 @@
 import { Player } from './entities/Player';
 import { InputManager } from './input/InputManager';
-import { LevelParser, LevelData } from './level/LevelParser';
+import { LevelData } from './level/LevelParser';
 import { LevelManager } from './level/LevelManager';
 import { Renderer } from './render/Renderer';
 import { Camera } from './render/Camera';
@@ -9,6 +9,8 @@ import { isColliding } from './math/AABB';
 import { canCollide } from './logic/CollisionMatrix';
 import { ColorState } from './types/Chromatic';
 import { GameState } from './logic/GameState';
+import { ParticlePool } from './render/ParticlePool';
+import { SoundManager } from './audio/SoundManager';
 
 export interface GameEngineOptions {
   canvas: HTMLCanvasElement;
@@ -27,6 +29,7 @@ export class GameEngine {
   public inputManager: InputManager;
   public levelManager: LevelManager;
   public camera!: Camera;
+  public particles: ParticlePool;
   
   public level!: LevelData;
   public state: GameState = GameState.START;
@@ -48,6 +51,7 @@ export class GameEngine {
     // Instantiate game systems
     this.levelManager = new LevelManager();
     this.inputManager = new InputManager();
+    this.particles = new ParticlePool(200);
 
     // Bootstrap first stage
     this.loadStage(0);
@@ -145,6 +149,9 @@ export class GameEngine {
    * Update game logic with a deterministic fixed timestep
    */
   private update(dt: number) {
+    // A. Update particles in real time
+    this.particles.update(dt);
+
     // 1. Manage State Machine transitions (Space/Jump bar restarts transitions)
     if (this.state !== GameState.PLAYING) {
       if (this.inputManager.state.jump) {
@@ -173,10 +180,26 @@ export class GameEngine {
       return; // Skip physical updates if not actively playing
     }
 
+    // Cache previous player color state to detect successful phase-shifting
+    const prevColor = this.player.colorState;
+
     // 2. Perform Split-Axis Collision Resolution
 
     // A. Resolve Horizontal Axis (X)
     this.player.updateX(dt, this.inputManager.state);
+
+    // If color shifted, trigger audio-visual feedback sweeps
+    if (this.player.colorState !== prevColor) {
+      SoundManager.playPhaseShiftSound(this.player.colorState);
+      const colorHex = this.player.colorState === ColorState.RED ? '#f43f5e' :
+                       this.player.colorState === ColorState.GREEN ? '#10b981' : '#3b82f6';
+      this.particles.emit(
+        this.player.x + this.player.width / 2,
+        this.player.y + this.player.height / 2,
+        colorHex,
+        15
+      );
+    }
 
     this.level.platforms.forEach((platform) => {
       if (platform.type === 'SOLID' && canCollide(this.player.colorState, platform.colorState)) {
@@ -214,6 +237,15 @@ export class GameEngine {
       if (isColliding(this.player, platform)) {
         if (platform.type === 'HAZARD') {
           this.state = GameState.DEAD;
+          SoundManager.playDeathSound();
+          const colorHex = this.player.colorState === ColorState.RED ? '#f43f5e' :
+                           this.player.colorState === ColorState.GREEN ? '#10b981' : '#3b82f6';
+          this.particles.emit(
+            this.player.x + this.player.width / 2,
+            this.player.y + this.player.height / 2,
+            colorHex,
+            50
+          );
           console.log('[GameEngine] Player touched HAZARD spikes! Transitioned to DEAD.');
         } else if (platform.type === 'GOAL') {
           this.state = GameState.VICTORY;
@@ -225,6 +257,15 @@ export class GameEngine {
     // Screen wrapping bounds fallback to prevent player falling infinitely out of grid
     if (this.player.y > this.camera.levelBounds.height + 200) {
       this.state = GameState.DEAD;
+      SoundManager.playDeathSound();
+      const colorHex = this.player.colorState === ColorState.RED ? '#f43f5e' :
+                       this.player.colorState === ColorState.GREEN ? '#10b981' : '#3b82f6';
+      this.particles.emit(
+        this.player.x + this.player.width / 2,
+        this.player.y + this.player.height / 2,
+        colorHex,
+        50
+      );
       console.log('[GameEngine] Player fell off stage boundaries. Transitioned to DEAD.');
     }
 
@@ -236,6 +277,6 @@ export class GameEngine {
    * Render screen updates with decoupled visual interpolation factor
    */
   private render(interpolation: number) {
-    Renderer.draw(this.ctx, this.player, this.level, interpolation, this.state, this.camera);
+    Renderer.draw(this.ctx, this.player, this.level, interpolation, this.state, this.camera, this.particles);
   }
 }
