@@ -16,12 +16,16 @@ describe('GameEngine', () => {
       fillRect: jest.fn(),
       strokeRect: jest.fn(),
       fillText: jest.fn(),
+      save: jest.fn(),
+      restore: jest.fn(),
+      setLineDash: jest.fn(),
       fillStyle: '',
       strokeStyle: '',
       font: '',
       textAlign: '',
       textBaseline: '',
       lineWidth: 0,
+      canvas: null as unknown as HTMLCanvasElement,
     } as unknown as CanvasRenderingContext2D;
 
     mockCanvas = {
@@ -29,6 +33,9 @@ describe('GameEngine', () => {
       width: 800,
       height: 600,
     } as unknown as HTMLCanvasElement;
+
+    // Connect context canvas circular reference
+    mockContext.canvas = mockCanvas;
 
     // Mock requestAnimationFrame and cancelAnimationFrame
     jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback: FrameRequestCallback) => {

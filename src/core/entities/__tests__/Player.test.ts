@@ -90,4 +90,30 @@ describe('Player Dynamics & Input Controllers', () => {
     player.update(16.6667, { ...blankInput, phaseRed: true });
     expect(player.colorState).toBe(ColorState.RED);
   });
+
+  test('should damp upward velocity when jump input is released while ascending', () => {
+    // 1. Grounded & trigger jump
+    player.isGrounded = true;
+    player.update(16.6667, { ...blankInput, jump: true });
+    expect(player.vy).toBe(PhysicsConfig.JUMP_IMPULSE); // vy = -0.45
+
+    // 2. Release jump button during ascent (vy < 0)
+    // Next update, jump button is released (blankInput)
+    player.update(16.6667, blankInput);
+
+    // Expected vy: (-0.45 + gravity * 16.67) * 0.5
+    const accumulatedGravityVy = PhysicsConfig.JUMP_IMPULSE + PhysicsConfig.GRAVITY * 16.6667;
+    const expectedDampedVy = accumulatedGravityVy * 0.5;
+
+    expect(player.vy).toBeCloseTo(expectedDampedVy, 4);
+    expect(player.hasJumpBeenCut).toBe(true);
+
+    // 3. Ensure jump is only cut once per jump cycle
+    const currentVy = player.vy;
+    player.update(16.6667, blankInput);
+
+    // Second tick: vy should accumulate gravity normally, NOT cut by another 50%
+    const expectedVyTick3 = currentVy + PhysicsConfig.GRAVITY * 16.6667;
+    expect(player.vy).toBeCloseTo(expectedVyTick3, 4);
+  });
 });
