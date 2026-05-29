@@ -12,6 +12,30 @@ export interface CollisionResolutionResult {
   axis: 'none' | 'x' | 'y';
 }
 
+const staticResult: CollisionResolutionResult = {
+  pos: { x: 0, y: 0 },
+  vel: { vx: 0, vy: 0 },
+  resolved: false,
+  axis: 'none',
+};
+
+function setStaticResult(
+  x: number,
+  y: number,
+  vx: number,
+  vy: number,
+  resolved: boolean,
+  axis: 'none' | 'x' | 'y'
+): CollisionResolutionResult {
+  staticResult.pos.x = x;
+  staticResult.pos.y = y;
+  staticResult.vel.vx = vx;
+  staticResult.vel.vy = vy;
+  staticResult.resolved = resolved;
+  staticResult.axis = axis;
+  return staticResult;
+}
+
 /**
  * Resolves standard 2D AABB collision using Minimum Penetration Depth projection.
  * Zeroes out velocity on the colliding axis.
@@ -28,20 +52,17 @@ export function resolveCollision(
 ): CollisionResolutionResult {
   // If no collision is registered, bypass resolution
   if (!isColliding(entity, obstacle)) {
-    return {
-      pos: { x: entity.x, y: entity.y },
-      vel: { ...velocity },
-      resolved: false,
-      axis: 'none',
-    };
+    return setStaticResult(entity.x, entity.y, velocity.vx, velocity.vy, false, 'none');
   }
 
   // Calculate intersection/overlap depth on both axes
   const overlapX = Math.min(entity.x + entity.width, obstacle.x + obstacle.width) - Math.max(entity.x, obstacle.x);
   const overlapY = Math.min(entity.y + entity.height, obstacle.y + obstacle.height) - Math.max(entity.y, obstacle.y);
 
-  const pos = { x: entity.x, y: entity.y };
-  const vel = { ...velocity };
+  let posX = entity.x;
+  let posY = entity.y;
+  let velVx = velocity.vx;
+  let velVy = velocity.vy;
 
   // Resolve along the axis of minimum penetration
   if (overlapX < overlapY) {
@@ -51,13 +72,13 @@ export function resolveCollision(
 
     if (entityCenter < obstacleCenter) {
       // Push Left
-      pos.x -= overlapX;
+      posX -= overlapX;
     } else {
       // Push Right
-      pos.x += overlapX;
+      posX += overlapX;
     }
-    vel.vx = 0; // Zero horizontal velocity on impact
-    return { pos, vel, resolved: true, axis: 'x' };
+    velVx = 0; // Zero horizontal velocity on impact
+    return setStaticResult(posX, posY, velVx, velVy, true, 'x');
   } else {
     // Vertical resolution (using <= to prioritize landing on platforms over side-projection in exact ties)
     const entityCenter = entity.y + entity.height / 2;
@@ -65,13 +86,13 @@ export function resolveCollision(
 
     if (entityCenter < obstacleCenter) {
       // Push Up (Land on top of platform)
-      pos.y -= overlapY;
+      posY -= overlapY;
     } else {
       // Push Down (Bonk head on ceiling)
-      pos.y += overlapY;
+      posY += overlapY;
     }
-    vel.vy = 0; // Zero vertical velocity on impact
-    return { pos, vel, resolved: true, axis: 'y' };
+    velVy = 0; // Zero vertical velocity on impact
+    return setStaticResult(posX, posY, velVx, velVy, true, 'y');
   }
 }
 
@@ -88,28 +109,25 @@ export function resolveCollisionX(
   obstacle: AABB
 ): CollisionResolutionResult {
   if (!isColliding(entity, obstacle)) {
-    return {
-      pos: { x: entity.x, y: entity.y },
-      vel: { ...velocity },
-      resolved: false,
-      axis: 'none',
-    };
+    return setStaticResult(entity.x, entity.y, velocity.vx, velocity.vy, false, 'none');
   }
 
   const overlapX = Math.min(entity.x + entity.width, obstacle.x + obstacle.width) - Math.max(entity.x, obstacle.x);
-  const pos = { x: entity.x, y: entity.y };
-  const vel = { ...velocity };
+  let posX = entity.x;
+  const posY = entity.y;
+  let velVx = velocity.vx;
+  const velVy = velocity.vy;
 
   const entityCenter = entity.x + entity.width / 2;
   const obstacleCenter = obstacle.x + obstacle.width / 2;
 
   if (entityCenter < obstacleCenter) {
-    pos.x -= overlapX;
+    posX -= overlapX;
   } else {
-    pos.x += overlapX;
+    posX += overlapX;
   }
-  vel.vx = 0;
-  return { pos, vel, resolved: true, axis: 'x' };
+  velVx = 0;
+  return setStaticResult(posX, posY, velVx, velVy, true, 'x');
 }
 
 /**
@@ -125,27 +143,24 @@ export function resolveCollisionY(
   obstacle: AABB
 ): CollisionResolutionResult {
   if (!isColliding(entity, obstacle)) {
-    return {
-      pos: { x: entity.x, y: entity.y },
-      vel: { ...velocity },
-      resolved: false,
-      axis: 'none',
-    };
+    return setStaticResult(entity.x, entity.y, velocity.vx, velocity.vy, false, 'none');
   }
 
   const overlapY = Math.min(entity.y + entity.height, obstacle.y + obstacle.height) - Math.max(entity.y, obstacle.y);
-  const pos = { x: entity.x, y: entity.y };
-  const vel = { ...velocity };
+  const posX = entity.x;
+  let posY = entity.y;
+  const velVx = velocity.vx;
+  let velVy = velocity.vy;
 
   const entityCenter = entity.y + entity.height / 2;
   const obstacleCenter = obstacle.y + obstacle.height / 2;
 
   if (entityCenter < obstacleCenter) {
-    pos.y -= overlapY;
+    posY -= overlapY;
   } else {
-    pos.y += overlapY;
+    posY += overlapY;
   }
-  vel.vy = 0;
-  return { pos, vel, resolved: true, axis: 'y' };
+  velVy = 0;
+  return setStaticResult(posX, posY, velVx, velVy, true, 'y');
 }
 

@@ -205,7 +205,11 @@ export class GameEngine {
       );
     }
 
-    this.level.platforms.forEach((platform) => {
+    const platforms = this.level.platforms;
+    const platformsLen = platforms.length;
+
+    for (let i = 0; i < platformsLen; i++) {
+      const platform = platforms[i];
       if (platform.type === 'SOLID' && canCollide(this.player.colorState, platform.colorState)) {
         const res = resolveCollisionX(this.player, this.player, platform);
         if (res.resolved) {
@@ -213,7 +217,7 @@ export class GameEngine {
           this.player.vx = res.vel.vx;
         }
       }
-    });
+    }
 
     // B. Resolve Vertical Axis (Y)
     this.player.updateY(dt, this.inputManager.state);
@@ -221,7 +225,8 @@ export class GameEngine {
     // Reset grounded flag before vertical sweep
     this.player.isGrounded = false;
 
-    this.level.platforms.forEach((platform) => {
+    for (let i = 0; i < platformsLen; i++) {
+      const platform = platforms[i];
       if (platform.type === 'SOLID' && canCollide(this.player.colorState, platform.colorState)) {
         const res = resolveCollisionY(this.player, this.player, platform);
         if (res.resolved) {
@@ -234,10 +239,11 @@ export class GameEngine {
           }
         }
       }
-    });
+    }
 
     // 3. Perform Hazard / Goal Overlap Checks
-    this.level.platforms.forEach((platform) => {
+    for (let i = 0; i < platformsLen; i++) {
+      const platform = platforms[i];
       if (isColliding(this.player, platform)) {
         if (platform.type === 'HAZARD') {
           this.state = GameState.DEAD;
@@ -268,7 +274,7 @@ export class GameEngine {
           console.log('[GameEngine] Player touched GOAL portal! Transitioned to VICTORY.');
         }
       }
-    });
+    }
 
     // Screen wrapping bounds fallback to prevent player falling infinitely out of grid
     if (this.player.y > this.camera.levelBounds.height + 200) {
