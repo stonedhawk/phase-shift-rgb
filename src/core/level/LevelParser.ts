@@ -33,7 +33,7 @@ export class LevelParser {
       throw new Error('Invalid level JSON payload: platforms must be a valid array');
     }
 
-    const platforms: PlatformData[] = data.platforms.map((p: any, index: number) => {
+    const platforms: PlatformData[] = data.platforms.map((p: { x: unknown; y: unknown; width: unknown; height: unknown; colorState: unknown; type?: unknown }, index: number) => {
       if (
         typeof p.x !== 'number' ||
         typeof p.y !== 'number' ||
