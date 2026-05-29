@@ -1,174 +1,165 @@
 # Product Requirements Document (PRD): Future Scaling & LiveOps Architecture
 
-## 1. Executive Summary & Objective
+## 1. Executive Summary
 
-**Phase Shift: RGB** currently operates as a high-performance, zero-latency, client-side browser platformer with localized assets. As the game transitions into a scalable portfolio showcase and a live-service product, we require the ability to empirically balance difficulty curves, ingest player behavioral data, and modify game physics or layouts dynamically without shipping code updates.
+### 1.1 Current State Recap
+The core **Phase Shift: RGB** gameplay framework operates as a high-fidelity, deterministic 60 FPS client platformer built with zero external runtime dependencies. By utilizing pure TypeScript rendering pipelines, an optimized fixed-timestep physics engine, and a strictly size-bounded particle pool, the client is highly performant and free of garbage collection (GC) stutters during dynamic platforming blocks.
 
-This document details the architecture for **Telemetry Ingestion**, **Remote Physics/Level Tuning**, **Dynamic A/B Testing**, and a unified **Content Level Pipeline** to transform the game into an agile, data-driven experience.
+### 1.2 The Transition Goal
+While the current vertical slice is technically robust, its gameplay properties (such as gravity force vectors and level boundaries) are statically compiled within the client package. To scale the product into a live portfolio service and achieve long-term player engagement, we must transition to a **LiveOps-driven architecture**. This enables:
+- Real-time physics and level layout configuration shifts without client-side rebuilds or deployments.
+- Ingestion of player telemetry to dynamically evaluate stage difficulty curves.
+- Synchronous A/B testing of control friction to maximize retention and conversion rates.
 
 ---
 
-## 2. Telemetry Ingestion & Spatial Analytics
+## 2. Telemetry Ingestion & Spatial Heatmaps
 
-To identify "choke points" where players fail or find sections overly frustrating, we will process real-time telemetry events emitted by the client's `TelemetryClient` into spatial heatmaps.
+To drive level progression updates and balance high-friction hazard sections, we will establish an analytical pipeline to ingest and map player telemetry events fired by the `TelemetryClient`.
 
-### 2.1 Event Schemas
+### 2.1 Analytics Ingestion Pipeline
 
-The client currently emits structured events during gameplay. The backend ingestion layer (Supabase / Firebase Functions) will capture and timestamp these events:
+```mermaid
+flowchart LR
+    A[TelemetryClient] -- Batched JSON --> B[Supabase Ingestion Edge API]
+    B -- Row Streaming --> C[(TimescaleDB Hypertable)]
+    C -- Batch Map-Reduce --> D[Analytics Database]
+    D -- Spatial Aggregation --> E[LiveOps Spatial Dashboard]
+```
 
-| Event Type | Payload Fields | Purpose |
-| :--- | :--- | :--- |
-| **`DeathEvent`** | `{ x: number, y: number, levelIndex: number, activeColor: ColorState, timeAlive: number }` | Maps exact coordinates and player colors during a failure event. |
-| **`LevelCompleteEvent`** | `{ levelIndex: number, totalTime: number, phaseShiftCount: number }` | Measures overall level duration and complexity metric (color swaps). |
+### 2.2 Ingesting Telemetry Schema
 
-### 2.2 Heatmap Ingestion Architecture
+The backend ingestion layers stream two core schemas emitted by the player's runtime client:
+
+1. **`DeathEvent` Schema**:
+   ```json
+   {
+     "levelIndex": 1,
+     "x": 342.15,
+     "y": 512.80,
+     "activeColor": "GREEN",
+     "timeAlive": 14220,
+     "timestamp": "2026-05-29T12:00:00Z"
+   }
+   ```
+2. **`LevelCompleteEvent` Schema**:
+   ```json
+   {
+     "levelIndex": 1,
+     "totalTime": 28450,
+     "phaseShiftCount": 12,
+     "timestamp": "2026-05-29T12:01:15Z"
+   }
+   ```
+
+### 2.3 Spatial Death Heatmaps & Difficulty Spikes
+To identify exact coordinates where collision meshes or hazard spikes trigger disproportionate failure rates, we will map death events as coordinate scatter arrays grouped by `levelIndex`.
+
+- **Density Binning**: Aggregate exact player coordinates into $32 \times 32$ pixel tiles (AABB grid units).
+- **Difficulty Thresholds**: A grid tile is flagged as a "Difficulty Spike" or a "Design Flaw" if the ratio of deaths within that tile to total level entries exceeds $20\%$.
+- **Visual Overlay Rendering**: The LiveOps Dashboard fetches density layers and overlays them as a canvas gradient directly on top of the level's platform rendering context:
+
+```typescript
+// Conceptual rendering of death intensity overlays on LiveOps Canvas
+export function drawDeathHeatmap(ctx: CanvasRenderingContext2D, deaths: Array<{x: number, y: number, intensity: number}>) {
+  for (let i = 0; i < deaths.length; i++) {
+    const d = deaths[i];
+    const alpha = Math.min(d.intensity / 100, 0.85);
+    ctx.fillStyle = `rgba(244, 63, 94, ${alpha})`; // Glowing Rose overlay
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, 16, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+```
+
+### 2.4 Retention & Player Progression Funnels
+To evaluate churn friction, we will track macro player progression across stages. The primary LiveOps analytics dashboard measures funnel drop-off metrics synchronously:
+
+| Funnel Step | Metric Definition | Target Conversion | Churn Analysis |
+| :--- | :--- | :--- | :--- |
+| **Stage 1 Arrival** | Unique initial load events. | $100\%$ (Baseline) | Initial bounce (load performance). |
+| **Stage 1 Complete** | Completion rate of Stage 1 (Redemption). | $>92\%$ | Evaluates onboarding control clarity. |
+| **Stage 2 Transition** | Arrival on Stage 2 (Chromatic Climb). | $>98\%$ (of Stage 1 completions) | Friction during camera transition or loading. |
+| **Stage 2 Complete** | Completion rate of Stage 2 (Climb). | $>65\%$ | Measures high-height layout and vertical camera tracking difficulty. |
+
+---
+
+## 3. Remote Configuration (LiveOps Tuning)
+
+To adjust difficulty curves without shipping new client builds, we will decouple the game's configuration files and introduce dynamic edge CDN edge fetching on boot.
+
+### 3.1 CDN Configuration Initialization
 
 ```mermaid
 sequenceDiagram
-    participant Client as TelemetryClient (Game)
-    participant Edge as Supabase Edge Functions / API Gateway
-    participant DB as Postgres (TimescaleDB / Hypertable)
-    participant Worker as Analytical Batch Worker
-    participant Dashboard as LiveOps Dashboard
+    participant User as Player
+    participant Client as Next.js Client
+    participant CDN as Edge CDN / CloudFront S3
+    participant Engine as GameEngine Core
 
-    Client->>Edge: Batch Flush Events (JSON over HTTPS)
-    Edge->>DB: Ingest Raw Payload (JSONB, indexed on levelIndex)
-    Worker->>DB: Query batch every 1 hour (2D Coordinate Binning)
-    Worker->>DB: Write aggregated density points to spatial_heatmaps table
-    Dashboard->>DB: Query aggregated heatmap data
-    Dashboard->>Dashboard: Render Overlay Heatmap using Leaflet/HTML5 Canvas
+    User->>Client: Open Site / Tap Initialize
+    Client->>CDN: GET /config/physics-v1.json (HTTP/3)
+    alt Cache Hit (Fast path)
+        CDN-->>Client: Return Configuration JSON (15ms)
+    else CDN Offline / Timeout
+        Client->>Client: Load Local Hardcoded Fallback JSON
+    end
+    Client->>Engine: Inject PhysicsConfig & LevelData arrays
+    Engine->>Engine: Start Loop (Deterministic 60 FPS)
 ```
 
-### 2.3 Spatial Coordinate Binning Algorithm
-
-To convert millions of coordinate points into a lightweight heatmap, the analytical pipeline uses a 2D grid coordinate binning algorithm:
-
-1. **Resolution Scale**: Group level coordinate grids into $32 \times 32$ pixel bins (matching the game's tile unit size).
-2. **Formula**:
-   $$\text{Bin}_x = \lfloor \frac{x}{32} \rfloor, \quad \text{Bin}_y = \lfloor \frac{y}{32} \rfloor$$
-3. **Clustering**: Apply Density-Based Spatial Clustering (DBSCAN) to identify high-density coordinate clusters where player deaths exceed a determined threshold (e.g., $>15\%$ of total level attempts).
-4. **Actionable Alerting**: If a cluster is flagged, trigger LiveOps alerts detailing the coordinate, the active color state at death, and average time elapsed, indicating a potential "snag point" or collision bug.
-
----
-
-## 3. Remote Configuration & LiveOps Tuning
-
-To balance physics variables and update level structures dynamically, we will transition the hardcoded parameters from `PhysicsConfig.ts` and the static definitions in `LevelManager.ts` to a secure CDN-backed JSON configuration API.
-
-### 3.1 Architecture Overview
-
-```mermaid
-graph TD
-    A[Initialization Gesture Click] --> B{Check Network Connection}
-    B -- Online --> C[Fetch JSON Config from Edge CDN / AWS CloudFront]
-    B -- Offline / Timeout --> D[Load Hardcoded Local Fallback Config]
-    C --> E[Inject Physics Values into PhysicsConfig instance]
-    C --> F[Provide Level JSON schemas to LevelParser]
-    D --> E
-    D --> F
-    E --> G[Initialize GameEngine & Start Game Loop]
-    F --> G
-```
-
-### 3.2 Physics Parameter Schema
-
-Instead of hardcoded constants, `PhysicsConfig` will be initialized using a typed JSON structure:
-
-```json
-{
-  "version": "1.0.4",
-  "physics": {
-    "MOVE_ACCELERATION": 0.0015,
-    "GROUND_FRICTION": 0.85,
-    "AIR_DRAG": 0.98,
-    "GRAVITY": 0.0012,
-    "JUMP_IMPULSE": -0.42,
-    "TERMINAL_VELOCITY_X": 0.35,
-    "TERMINAL_VELOCITY_Y": 0.85
-  }
-}
-```
-
-> [!TIP]
-> **Zero-Deployment Tuning**
-> By altering `JUMP_IMPULSE` or `GRAVITY` in the CDN configuration file, LiveOps developers can adjust jump trajectories in real time to compensate for player lag or to increase accessibility on mobile touch-interfaces.
-
----
-
-## 4. Dynamic A/B Testing Framework
-
-To scientifically validate balancing decisions (e.g., "Does a 5% reduction in gravity improve Level 2 completion rates without reducing player engagement?"), we will introduce an inline, zero-latency A/B testing router.
-
-### 4.1 Bucket Allocation System
-
-Upon initialization, the client generates or retrieves a unique persistent client UUID. The player is hashed into a test bucket synchronously:
+### 3.2 Dynamic Physics Configuration
+The hardcoded constants in `PhysicsConfig.ts` will be replaced by a dynamic runtime config state populated from the edge fetch:
 
 ```typescript
-import { PhysicsConfig } from './config/PhysicsConfig';
-
-export function routeA/BTest(playerUuid: string, remoteConfigPayload: any) {
-  // Simple deterministic hash matching a bucket [0, 99]
-  let hash = 0;
-  for (let i = 0; i < playerUuid.length; i++) {
-    hash = (hash << 5) - hash + playerUuid.charCodeAt(i);
-    hash |= 0; // Convert to 32bit integer
-  }
-  const bucket = Math.abs(hash) % 100;
-
-  if (bucket < 50) {
-    // Group A (Control - Baseline Physics)
-    applyPhysicsConfig(remoteConfigPayload.control);
-    trackExperimentAssignment("Experiment_Gravity_V1", "Control");
-  } else {
-    // Group B (Treatment - 5% Lighter Gravity)
-    applyPhysicsConfig(remoteConfigPayload.treatment_light_gravity);
-    trackExperimentAssignment("Experiment_Gravity_V1", "Treatment_Light");
-  }
+export interface RemotePhysicsConfig {
+  MOVE_ACCELERATION: number;
+  GROUND_FRICTION: number;
+  AIR_DRAG: number;
+  GRAVITY: number;
+  JUMP_IMPULSE: number;
+  TERMINAL_VELOCITY_X: number;
+  TERMINAL_VELOCITY_Y: number;
 }
 ```
+By lowering `GRAVITY` (e.g., from `0.0012` to `0.0011`) or increasing `JUMP_IMPULSE` slightly, game designers can tune the exact jump trajectory radius to assist player landing precision without editing a single line of typescript code.
 
-### 4.2 Key Performance Indicators (KPIs) to Track
+### 3.3 Dynamic A/B Testing Framework
+To optimize player retention curves empirically, players will be segmented into test cohorts synchronously at launch.
 
-To evaluate experiment success, the batch analytical engine will correlate assignment buckets with events to calculate the following metrics:
-
-1. **Completion Rate ($CR_L$)**:
-   $$CR_L = \frac{\sum \text{LevelCompleteEvents}_L}{\sum \text{LevelCompleteEvents}_L + \sum \text{DeathEvents}_L}$$
-2. **Phase-Shift Friction Index ($PSFI$)**:
-   $$\text{Average Color Shifts per Complete Level}$$
-3. **Frustration Coefficient ($FC$)**:
-   $$\text{Average Deaths per Completed User}$$
-
-An experiment will be promoted to the default production profile if Group B shows a statistically significant increase in $CR_L$ ($p < 0.05$) without a corresponding reduction in playtime or phase-shift interactions.
+- **Bucket Allocation**: Hashing the player's persistent client UUID yields a deterministic index $I \in [0, 99]$:
+  $$\text{Cohort} = (\sum_{i} \text{charValue}(\text{UUID}_i)) \pmod{100}$$
+- **Variant Routing**:
+  - **Cohort $0 \le I < 50$ (Variant A - Control)**: Receives standard, heavier gravity parameters (highly precise, high-difficulty).
+  - **Cohort $50 \le I < 100$ (Variant B - Treatment)**: Receives $5\%$ lighter gravity and increased horizontal air control (accessible and forgiving platforming).
+- **Success Criteria**: If Variant B shows a statistically significant increase in Level 2 completion rates ($p < 0.05$) alongside a $+12\%$ improvement in Day-1 retention without reducing total levels played, the lighter gravity metrics will be promoted to all players as the production baseline.
 
 ---
 
-## 5. Content Pipeline & Visual Level Editor Schema
+## 4. Content Pipeline & Tooling
 
-To empower game designers to build complex stages without editing source files, we will create a web-based, drag-and-drop Visual Level Editor. The editor will parse and serialize maps matching the `LevelParser.ts` interface.
+To accelerate level generation and eliminate JSON file formatting errors, we propose a visual, browser-based drag-and-drop tool: **Phase Shift: Level Architect**.
 
-### 5.1 Serializable JSON Schema (`LevelSchema.json`)
+### 4.1 Level Architect Design
+The **Level Architect** is a visual companion web page sharing the core renderer assets. It features:
+1. **Interactive Design Grid**: Snaps all placed platforms, hazard spikes, and level goals to a customizable grid aligning coordinates to $32 \times 32$ pixel divisions.
+2. **Chromatic Attribute Mapper**: A context panel enabling designers to select any placed AABB block and map its `ColorState` (`RED`, `GREEN`, `BLUE`, or `NEUTRAL`) and `type` (`SOLID`, `HAZARD`, or `GOAL`).
+3. **Traversability Simulation**: An embedded AI agent runner that plays the level programmatically in the background using basic heuristic jumps, validating that the stage is mathematically beatable before exporting.
 
-The Visual Level Editor will compile and validate layouts against the following standardized JSON Schema:
+### 4.2 Serializable Export Schema (`LevelSchema.json`)
+The Level Architect exports layout JSON strings matching the parser definitions. The strict export schema conforms to:
 
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "PhaseShiftLevel",
+  "title": "LevelArchitectExport",
   "type": "object",
   "properties": {
-    "levelIndex": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "levelName": {
-      "type": "string"
-    },
-    "spawnX": {
-      "type": "number"
-    },
-    "spawnY": {
-      "type": "number"
-    },
+    "levelIndex": { "type": "integer", "minimum": 0 },
+    "levelName": { "type": "string" },
+    "spawnX": { "type": "number" },
+    "spawnY": { "type": "number" },
     "bounds": {
       "type": "object",
       "properties": {
@@ -180,45 +171,21 @@ The Visual Level Editor will compile and validate layouts against the following 
     "platforms": {
       "type": "array",
       "items": {
-        "$ref": "#/definitions/Platform"
+        "type": "object",
+        "properties": {
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "width": { "type": "number" },
+          "height": { "type": "number" },
+          "type": { "type": "string", "enum": ["SOLID", "HAZARD", "GOAL"] },
+          "colorState": { "type": "string", "enum": ["RED", "GREEN", "BLUE", "NEUTRAL"] }
+        },
+        "required": ["x", "y", "width", "height", "type", "colorState"]
       }
     }
   },
-  "required": ["levelIndex", "levelName", "spawnX", "spawnY", "bounds", "platforms"],
-  "definitions": {
-    "Platform": {
-      "type": "object",
-      "properties": {
-        "x": { "type": "number" },
-        "y": { "type": "number" },
-        "width": { "type": "number" },
-        "height": { "type": "number" },
-        "type": {
-          "type": "string",
-          "enum": ["SOLID", "HAZARD", "GOAL"]
-        },
-        "colorState": {
-          "type": "string",
-          "enum": ["RED", "GREEN", "BLUE", "NEUTRAL"]
-        }
-      },
-      "required": ["x", "y", "width", "height", "type", "colorState"]
-    }
-  }
+  "required": ["levelIndex", "levelName", "spawnX", "spawnY", "bounds", "platforms"]
 }
 ```
 
-### 5.2 Dynamic Grid Alignment
-
-The visual editor will enforce a strict grid placement system:
-- **Default Grid Cell Size**: $32 \times 32$ pixels.
-- **Snapping Algorithm**: Platform coordinates and sizes are snapped on drag-release:
-  $$x_{\text{snapped}} = \text{round}(x / 32) \times 32$$
-  $$y_{\text{snapped}} = \text{round}(y / 32) \times 32$$
-- **Color Overlay View**: Designers can toggle visual overlays (Red, Green, Blue matching the RGB spectrum) to preview platform collidability from the player's perspective, ensuring levels are mathematically beatable before serialization.
-
----
-
-> [!WARNING]
-> **Level Size Rendering Limits**
-> To maintain high rendering speeds and a locked 60 FPS profile on lower-spec mobile units, visual stages should be limited to a maximum of **150 platform coordinates** per viewport camera segment, ensuring standard browser canvas operations are completely bottleneck-free.
+This standardized content pipeline bridges the gap between creative visual level design and high-performance, zero-allocation game engine execution.
