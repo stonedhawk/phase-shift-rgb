@@ -35,6 +35,22 @@ export const GameCanvas: React.FC = () => {
     engineRef.current = engine;
     engine.start();
 
+    // Autoplay override to facilitate automated portfolio headless screenshot capture
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('autoplay') === 'true') {
+        engine.state = GameState.PLAYING;
+        setIsInteracted(true);
+
+        // Apply a slight velocity and burst of particles synchronously to paint on the very first frame
+        engine.player.colorState = ColorState.GREEN;
+        const p = engine.player;
+        p.vy = -0.35;
+        p.vx = 0.15;
+        engine.particles.emit(p.x + p.width / 2, p.y + p.height / 2, '#10b981', 30);
+      }
+    }
+
     // Setup periodic low-frequency telemetry pulls (500ms) to bypass virtual DOM overhead during gameplay
     let lastTicks = 0;
     let lastTime = performance.now();
