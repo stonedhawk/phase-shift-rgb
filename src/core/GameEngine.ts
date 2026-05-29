@@ -1,7 +1,9 @@
 import { Player } from './entities/Player';
 import { InputManager } from './input/InputManager';
 import { LevelParser, LevelData } from './level/LevelParser';
+import { LevelManager } from './level/LevelManager';
 import { Renderer } from './render/Renderer';
+import { Camera } from './render/Camera';
 import { resolveCollisionX, resolveCollisionY } from './math/Physics';
 import { isColliding } from './math/AABB';
 import { canCollide } from './logic/CollisionMatrix';
@@ -21,9 +23,12 @@ export class GameEngine {
   private isRunning: boolean = false;
 
   // Active game systems
-  public player: Player;
+  public player!: Player;
   public inputManager: InputManager;
-  public level: LevelData;
+  public levelManager: LevelManager;
+  public camera!: Camera;
+  
+  public level!: LevelData;
   public state: GameState = GameState.START;
 
   // Target 60 FPS (approx 16.67ms per frame)
@@ -31,28 +36,6 @@ export class GameEngine {
   public readonly dt = 1000 / this.targetFps; 
   public totalTime = 0;
   public ticks = 0;
-
-  // Stage JSON data containing SOLIDS, HAZARDS, and GOAL
-  private static readonly TEST_LEVEL_SCHEMA = JSON.stringify({
-    spawnX: 100,
-    spawnY: 100,
-    platforms: [
-      // Bottom border boundaries (RED)
-      { x: 0, y: 560, width: 800, height: 40, colorState: 'RED', type: 'SOLID' },
-      
-      // Floating solid platform chunks
-      { x: 150, y: 440, width: 150, height: 20, colorState: 'BLUE', type: 'SOLID' },
-      { x: 500, y: 440, width: 150, height: 20, colorState: 'GREEN', type: 'SOLID' },
-      { x: 300, y: 320, width: 200, height: 20, colorState: 'RED', type: 'SOLID' },
-      
-      // Hazardous spike layers (RED) - player will dissolve on touch
-      { x: 350, y: 540, width: 100, height: 20, colorState: 'RED', type: 'HAZARD' },
-      
-      // Goal Portal and supporting ledge (BLUE)
-      { x: 720, y: 160, width: 50, height: 60, colorState: 'BLUE', type: 'GOAL' },
-      { x: 700, y: 220, width: 100, height: 20, colorState: 'BLUE', type: 'SOLID' }
-    ]
-  });
 
   constructor(options: GameEngineOptions) {
     this.canvas = options.canvas;
@@ -62,10 +45,32 @@ export class GameEngine {
     }
     this.ctx = context;
 
-    // Instantiate game controllers
+    // Instantiate game systems
+    this.levelManager = new LevelManager();
     this.inputManager = new InputManager();
-    this.level = LevelParser.parse(GameEngine.TEST_LEVEL_SCHEMA);
+
+    // Bootstrap first stage
+    this.loadStage(0);
+  }
+
+  /**
+   * Loads specific level configurations and resets dynamic entities and cameras.
+   */
+  public loadStage(index: number) {
+    const stage = this.levelManager.loadLevel(index);
+    if (!stage) {
+      // Revert to START screen on overflow fallback
+      this.state = GameState.START;
+      this.loadStage(0);
+      return;
+    }
+
+    this.level = stage.level;
     this.player = new Player(this.level.spawnX, this.level.spawnY);
+    
+    // Instantiate camera mapping level dimension bounds
+    this.camera = new Camera(this.canvas.width, this.canvas.height, stage.bounds);
+    this.camera.snapTo(this.player);
   }
 
   /**
@@ -143,19 +148,29 @@ export class GameEngine {
     // 1. Manage State Machine transitions (Space/Jump bar restarts transitions)
     if (this.state !== GameState.PLAYING) {
       if (this.inputManager.state.jump) {
-        // Reset player state to defaults on transition to PLAYING
-        this.player.x = this.level.spawnX;
-        this.player.y = this.level.spawnY;
-        this.player.vx = 0;
-        this.player.vy = 0;
-        this.player.isGrounded = false;
-        this.player.colorState = ColorState.RED;
-        this.player.prevX = this.level.spawnX;
-        this.player.prevY = this.level.spawnY;
-        this.state = GameState.PLAYING;
-        console.log('[GameEngine] Transitioned to PLAYING state.');
+        if (this.state === GameState.VICTORY) {
+          // Increment stage index
+          const nextStage = this.levelManager.loadNextLevel();
+          if (nextStage) {
+            this.level = nextStage.level;
+            this.player = new Player(this.level.spawnX, this.level.spawnY);
+            this.camera.levelBounds = nextStage.bounds;
+            this.camera.snapTo(this.player);
+            this.state = GameState.PLAYING;
+            console.log(`[GameEngine] Transitioned to Stage ${nextStage.index + 1}`);
+          } else {
+            // Loop back to main menu
+            this.state = GameState.START;
+            this.loadStage(0);
+          }
+        } else {
+          // START or DEAD: reload current stage spawned positions
+          this.loadStage(this.levelManager.currentLevelIndex);
+          this.state = GameState.PLAYING;
+          console.log('[GameEngine] Reboot respawn triggered.');
+        }
       }
-      return; // Skip physical movement loops if not in PLAYING state
+      return; // Skip physical updates if not actively playing
     }
 
     // 2. Perform Split-Axis Collision Resolution
@@ -199,7 +214,7 @@ export class GameEngine {
       if (isColliding(this.player, platform)) {
         if (platform.type === 'HAZARD') {
           this.state = GameState.DEAD;
-          console.log('[GameEngine] Player touched HAZARD spike! Transitioned to DEAD.');
+          console.log('[GameEngine] Player touched HAZARD spikes! Transitioned to DEAD.');
         } else if (platform.type === 'GOAL') {
           this.state = GameState.VICTORY;
           console.log('[GameEngine] Player touched GOAL portal! Transitioned to VICTORY.');
@@ -208,16 +223,19 @@ export class GameEngine {
     });
 
     // Screen wrapping bounds fallback to prevent player falling infinitely out of grid
-    if (this.player.y > this.canvas.height + 200) {
+    if (this.player.y > this.camera.levelBounds.height + 200) {
       this.state = GameState.DEAD;
       console.log('[GameEngine] Player fell off stage boundaries. Transitioned to DEAD.');
     }
+
+    // 4. Update Camera Lerp tracking on player
+    this.camera.follow(this.player, dt);
   }
 
   /**
    * Render screen updates with decoupled visual interpolation factor
    */
   private render(interpolation: number) {
-    Renderer.draw(this.ctx, this.player, this.level, interpolation, this.state);
+    Renderer.draw(this.ctx, this.player, this.level, interpolation, this.state, this.camera);
   }
 }
