@@ -19,6 +19,10 @@ export class Player implements AABB {
   public hasJumpBeenCut: boolean = false;
   public colorState: ColorState = ColorState.RED;
 
+  // Trackers for asynchronous telemetry pipelines
+  public timeAlive: number = 0;
+  public phaseShiftCount: number = 0;
+
   constructor(x: number, y: number, width: number = 32, height: number = 48) {
     this.x = x;
     this.y = y;
@@ -36,6 +40,7 @@ export class Player implements AABB {
    * @param inputState Binary active inputs mapping
    */
   public update(dt: number, inputState: InputState) {
+    this.timeAlive += dt;
     this.updateX(dt, inputState);
     this.updateY(dt, inputState);
   }
@@ -53,12 +58,13 @@ export class Player implements AABB {
     }
 
     // 1. Color State Toggles (immediate state mutation)
-    if (inputState.phaseRed) {
-      this.colorState = ColorState.RED;
-    } else if (inputState.phaseGreen) {
-      this.colorState = ColorState.GREEN;
-    } else if (inputState.phaseBlue) {
-      this.colorState = ColorState.BLUE;
+    const targetColor = inputState.phaseRed ? ColorState.RED :
+                        inputState.phaseGreen ? ColorState.GREEN :
+                        inputState.phaseBlue ? ColorState.BLUE : null;
+
+    if (targetColor !== null && targetColor !== this.colorState) {
+      this.colorState = targetColor;
+      this.phaseShiftCount++;
     }
 
     // 2. Horizontal movement logic

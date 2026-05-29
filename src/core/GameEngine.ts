@@ -11,6 +11,7 @@ import { ColorState } from './types/Chromatic';
 import { GameState } from './logic/GameState';
 import { ParticlePool } from './render/ParticlePool';
 import { SoundManager } from './audio/SoundManager';
+import { TelemetryClient } from './telemetry/TelemetryClient';
 
 export interface GameEngineOptions {
   canvas: HTMLCanvasElement;
@@ -30,6 +31,7 @@ export class GameEngine {
   public levelManager: LevelManager;
   public camera!: Camera;
   public particles: ParticlePool;
+  public telemetry: TelemetryClient;
   
   public level!: LevelData;
   public state: GameState = GameState.START;
@@ -52,6 +54,7 @@ export class GameEngine {
     this.levelManager = new LevelManager();
     this.inputManager = new InputManager();
     this.particles = new ParticlePool(200);
+    this.telemetry = new TelemetryClient();
 
     // Bootstrap first stage
     this.loadStage(0);
@@ -102,8 +105,9 @@ export class GameEngine {
   public stop() {
     this.isRunning = false;
     
-    // Clean keys to avoid memory leaks
+    // Clean keys and intervals to avoid memory leaks
     this.inputManager.cleanup();
+    this.telemetry.cleanup();
 
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
@@ -237,6 +241,13 @@ export class GameEngine {
       if (isColliding(this.player, platform)) {
         if (platform.type === 'HAZARD') {
           this.state = GameState.DEAD;
+          this.telemetry.trackDeath({
+            x: Math.round(this.player.x),
+            y: Math.round(this.player.y),
+            levelIndex: this.levelManager.currentLevelIndex,
+            activeColor: this.player.colorState,
+            timeAlive: Math.round(this.player.timeAlive),
+          });
           SoundManager.playDeathSound();
           const colorHex = this.player.colorState === ColorState.RED ? '#f43f5e' :
                            this.player.colorState === ColorState.GREEN ? '#10b981' : '#3b82f6';
@@ -249,6 +260,11 @@ export class GameEngine {
           console.log('[GameEngine] Player touched HAZARD spikes! Transitioned to DEAD.');
         } else if (platform.type === 'GOAL') {
           this.state = GameState.VICTORY;
+          this.telemetry.trackLevelComplete({
+            levelIndex: this.levelManager.currentLevelIndex,
+            totalTime: Math.round(this.player.timeAlive),
+            phaseShiftCount: this.player.phaseShiftCount,
+          });
           console.log('[GameEngine] Player touched GOAL portal! Transitioned to VICTORY.');
         }
       }
@@ -257,6 +273,13 @@ export class GameEngine {
     // Screen wrapping bounds fallback to prevent player falling infinitely out of grid
     if (this.player.y > this.camera.levelBounds.height + 200) {
       this.state = GameState.DEAD;
+      this.telemetry.trackDeath({
+        x: Math.round(this.player.x),
+        y: Math.round(this.player.y),
+        levelIndex: this.levelManager.currentLevelIndex,
+        activeColor: this.player.colorState,
+        timeAlive: Math.round(this.player.timeAlive),
+      });
       SoundManager.playDeathSound();
       const colorHex = this.player.colorState === ColorState.RED ? '#f43f5e' :
                        this.player.colorState === ColorState.GREEN ? '#10b981' : '#3b82f6';
