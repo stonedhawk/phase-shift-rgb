@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Phase Shift: RGB
 
-## Getting Started
+A sleek, high-performance, dark-themed retro browser arcade built with **Next.js 16 (App Router)** and **Tailwind CSS**. 
 
-First, run the development server:
+This portfolio project showcases advanced game engineering principles in modern client environments, specifically demonstrating **zero-garbage-collection** active frames and pure programmatic **Web Audio API** procedural sound synthesis.
 
+---
+
+## 🚀 Key Highlights & Architectural Tenets
+
+- **Zero Garbage Collection Gameplay**: All visual feedback particles (bursts, hazard trails) utilize a strictly sized pre-allocated **Object Pool** of exactly 200 particle instances. Bypasses heap allocations during game ticks to prevent frame-rate stutters.
+- **Procedural Sound Synthesis**: Features custom low-pass and high-pass oscillator wave synthesizers built on browser-native `AudioContext`. Zero heavyweight `.wav`/`.mp3` assets are loaded, keeping the repository 100% zero-dependency.
+- **Euler Split-Axis Physics**: Features custom AABB math calculations. Horizontally and vertically isolated collision sweeps completely prevent edge-snagging on tiled platforms.
+- **Decoupled Engine Loop**: Runs gameplay logic ticks at a fixed 60 FPS clock (`16.67ms` steps) using a requestAnimationFrame accumulator, decoupled from React's fiber rendering cycle to secure massive CPU load gains.
+- **Lerp scrolling Camera**: Smoothly tracks the player viewport inside map bounds, employing integer floor translations to eliminate sub-pixel rendering blur.
+
+---
+
+## 🛠️ Tech Stack & Structure
+
+- **Core**: Next.js 16 (App Router), React 19, TypeScript
+- **Styling**: Tailwind CSS v4, Vanilla CSS
+- **Testing**: Jest (JSDOM Environment), ts-jest
+- **Scaffolding**: Standard pure JavaScript/TypeScript engine modules decoupled from the browser DOM.
+
+---
+
+## ⚙️ Getting Started
+
+### 1. Install Dependencies
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Run the Development Server
+```bash
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) with your browser to experience the retro-arcade dashboard!
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Run the Test Suite (Jest TDD)
+```bash
+npm run test
+```
+Runs 51 comprehensive assertions covering physics matrices, AABB collisions, input events, stage managers, camera lerps, and object pool recycling.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 4. Build for Production
+```bash
+npm run build
+```
+Generates a static-page optimized distribution fully pre-packaged for Vercel deployment.
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 📖 Architectural Manual
+For an in-depth look at class schemas, coordinate matrices, and system pipelines, explore the [docs/README.md](file:///Users/rahul.shah/Documents/Antigravity/Phase_Shift_RGB_Docs/docs/README.md) directory.
