@@ -41,8 +41,8 @@ async function main() {
     // Set matching viewport resolution
     await page.setViewport({ width: 1200, height: 900 });
 
-    console.log('[Capture] Navigating to autoplay route http://localhost:3009?autoplay=true...');
-    await page.goto('http://localhost:3009?autoplay=true', {
+    console.log('[Capture] Navigating to autoplay route http://localhost:3009/phase-shift-rgb?autoplay=true...');
+    await page.goto('http://localhost:3009/phase-shift-rgb?autoplay=true', {
       waitUntil: 'networkidle2',
     });
 
