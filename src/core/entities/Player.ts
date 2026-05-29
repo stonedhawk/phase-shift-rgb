@@ -9,9 +9,14 @@ export class Player implements AABB {
   public width: number;
   public height: number;
 
+  // Inter-frame visual interpolation trackers
+  public prevX: number;
+  public prevY: number;
+
   public vx: number = 0;
   public vy: number = 0;
   public isGrounded: boolean = false;
+  public hasJumpBeenCut: boolean = false;
   public colorState: ColorState = ColorState.RED;
 
   constructor(x: number, y: number, width: number = 32, height: number = 48) {
@@ -19,6 +24,8 @@ export class Player implements AABB {
     this.y = y;
     this.width = width;
     this.height = height;
+    this.prevX = x;
+    this.prevY = y;
   }
 
   /**
@@ -29,6 +36,15 @@ export class Player implements AABB {
    * @param inputState Binary active inputs mapping
    */
   public update(dt: number, inputState: InputState) {
+    // Cache current physical coordinates before positional updates for decoupled renderer visual interpolation
+    this.prevX = this.x;
+    this.prevY = this.y;
+
+    // Reset jump cut-off flag when grounded
+    if (this.isGrounded) {
+      this.hasJumpBeenCut = false;
+    }
+
     // 1. Color State Toggles (immediate state mutation)
     if (inputState.phaseRed) {
       this.colorState = ColorState.RED;
@@ -61,6 +77,12 @@ export class Player implements AABB {
     // Apply gravity force
     this.vy += PhysicsConfig.GRAVITY * dt;
 
+    // Variable jump cut-off (if user releases Jump button during ascent, cut jump short by 50%)
+    if (!inputState.jump && this.vy < 0 && !this.hasJumpBeenCut) {
+      this.vy *= 0.5;
+      this.hasJumpBeenCut = true;
+    }
+
     // Clamp vertical velocity to terminal limits (prevents clipping through thin platforms during fast falls)
     if (this.vy > PhysicsConfig.TERMINAL_VELOCITY_Y) {
       this.vy = PhysicsConfig.TERMINAL_VELOCITY_Y;
@@ -72,6 +94,7 @@ export class Player implements AABB {
     if (inputState.jump && this.isGrounded) {
       this.vy = PhysicsConfig.JUMP_IMPULSE;
       this.isGrounded = false;
+      this.hasJumpBeenCut = false;
     }
 
     // 4. Update coordinates using integrated velocities
