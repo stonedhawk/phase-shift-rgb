@@ -40,7 +40,7 @@ export const GameCanvas: React.FC = () => {
       const params = new URLSearchParams(window.location.search);
       if (params.get('autoplay') === 'true') {
         engine.state = GameState.PLAYING;
-        setIsInteracted(true);
+        setTimeout(() => setIsInteracted(true), 0);
 
         // Apply a slight velocity and burst of particles synchronously to paint on the very first frame
         engine.player.colorState = ColorState.GREEN;
