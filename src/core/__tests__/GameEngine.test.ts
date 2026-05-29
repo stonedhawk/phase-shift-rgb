@@ -23,6 +23,7 @@ describe('GameEngine', () => {
       moveTo: jest.fn(),
       lineTo: jest.fn(),
       stroke: jest.fn(),
+      translate: jest.fn(),
       fillStyle: '',
       strokeStyle: '',
       font: '',

@@ -2,6 +2,7 @@ import { Player } from '../entities/Player';
 import { LevelData, PlatformData } from '../level/LevelParser';
 import { ColorState } from '../types/Chromatic';
 import { GameState } from '../logic/GameState';
+import { Camera } from './Camera';
 
 export class Renderer {
   // Hex color constants for premium retro-arcade glow styling (shadows removed for massive CPU gain)
@@ -16,20 +17,22 @@ export class Renderer {
   private static readonly STAGE_BACKGROUND = '#030712'; // Slate-950 ultra-dark
 
   /**
-   * Decoupled Canvas draw pipeline utilizing linear render interpolations.
+   * Decoupled Canvas draw pipeline utilizing linear render interpolations and scroll translations.
    * 
    * @param ctx The Target HTML5 Canvas 2D Rendering Context
    * @param player Dynamic Player Entity
    * @param level Static parsed platform list data
    * @param interpolation Linear fractional factor [0, 1] representing tick offsets
    * @param gameState Current game loop state machine status
+   * @param camera Tracking camera system viewport
    */
   public static draw(
     ctx: CanvasRenderingContext2D,
     player: Player,
     level: LevelData,
     interpolation: number,
-    gameState: GameState = GameState.PLAYING
+    gameState: GameState = GameState.PLAYING,
+    camera?: Camera
   ) {
     const width = ctx.canvas ? ctx.canvas.width : 800;
     const height = ctx.canvas ? ctx.canvas.height : 600;
@@ -38,7 +41,13 @@ export class Renderer {
     ctx.fillStyle = this.STAGE_BACKGROUND;
     ctx.fillRect(0, 0, width, height);
 
+    // Save context before viewport scroll translations
     ctx.save();
+
+    if (camera) {
+      // Apply integer translation to prevent sub-pixel rendering blur on entities
+      ctx.translate(-Math.floor(camera.x), -Math.floor(camera.y));
+    }
 
     // 2. Draw Platforms (Environment)
     level.platforms.forEach((platform) => {
@@ -50,10 +59,11 @@ export class Renderer {
       this.drawPlayer(ctx, player, interpolation);
     }
 
-    // 4. Draw Overlay States for UI feedback
-    this.drawUIOverlay(ctx, gameState, width, height);
-
+    // Restore coordinate transformations to draw static overlays
     ctx.restore();
+
+    // 4. Draw Overlay States for UI feedback (renders at static screen coords)
+    this.drawUIOverlay(ctx, gameState, width, height);
   }
 
   private static drawPlatform(
