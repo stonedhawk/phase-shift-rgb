@@ -59,8 +59,8 @@ describe('GameState Machine Logic', () => {
     const engine = new GameEngine({ canvas: mockCanvas });
     engine.state = GameState.PLAYING;
 
-    // Manually overlap player with the hazard spikes in the test level
-    // Spikes are at x: 350, y: 540, width: 100, height: 20
+    // Manually overlap player with a hazard spikes platform
+    engine.level.platforms.push({ x: 350, y: 540, width: 100, height: 20, colorState: ColorState.RED, type: 'HAZARD' });
     engine.player.x = 360;
     engine.player.y = 530; // overlaps spikes
 
@@ -73,8 +73,8 @@ describe('GameState Machine Logic', () => {
     const engine = new GameEngine({ canvas: mockCanvas });
     engine.state = GameState.PLAYING;
 
-    // Manually overlap player with the goal portal
-    // Portal is at x: 720, y: 160, width: 50, height: 60
+    // Manually overlap player with a goal portal platform
+    engine.level.platforms.push({ x: 720, y: 160, width: 50, height: 60, colorState: ColorState.BLUE, type: 'GOAL' });
     engine.player.x = 730;
     engine.player.y = 170; // overlaps goal
 

@@ -115,6 +115,13 @@ export const GameCanvas: React.FC = () => {
         {/* Dynamic Scanline overlay for arcade visual aesthetic */}
         <div className="absolute inset-0 pointer-events-none bg-scanlines opacity-[0.03] mix-blend-overlay" />
 
+        {/* Persistent HTML Control Overlay */}
+        <div className="absolute bottom-4 left-0 right-0 pointer-events-none flex justify-center z-10">
+          <div className="bg-slate-950/70 border border-slate-800/50 rounded-full px-6 py-2 backdrop-blur-sm opacity-70 font-mono text-[10px] sm:text-xs text-slate-300 tracking-wider shadow-lg">
+            <span className="text-indigo-400 font-bold">[◀/▶]</span> Move  |  <span className="text-emerald-400 font-bold">[SPACE]</span> Jump  |  <span className="text-rose-500 font-bold">[1]</span> Red  <span className="text-emerald-500 font-bold">[2]</span> Green  <span className="text-blue-500 font-bold">[3]</span> Blue
+          </div>
+        </div>
+
         {/* Breathtaking User Gesture Unlocking Overlay */}
         {!isInteracted && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-950/90 backdrop-blur-md transition-all duration-300">

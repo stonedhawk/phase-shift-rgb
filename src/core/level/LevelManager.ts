@@ -15,15 +15,12 @@ export class LevelManager {
   // Level 1: original single-screen puzzle stage
   private static readonly STAGE_1_SCHEMA = JSON.stringify({
     spawnX: 100,
-    spawnY: 100,
+    spawnY: 300,
     platforms: [
-      { x: 0, y: 560, width: 800, height: 40, colorState: 'RED', type: 'SOLID' },
-      { x: 150, y: 440, width: 150, height: 20, colorState: 'BLUE', type: 'SOLID' },
-      { x: 500, y: 440, width: 150, height: 20, colorState: 'GREEN', type: 'SOLID' },
-      { x: 300, y: 320, width: 200, height: 20, colorState: 'RED', type: 'SOLID' },
-      { x: 350, y: 540, width: 100, height: 20, colorState: 'RED', type: 'HAZARD' },
-      { x: 720, y: 160, width: 50, height: 60, colorState: 'BLUE', type: 'GOAL' },
-      { x: 700, y: 220, width: 100, height: 20, colorState: 'BLUE', type: 'SOLID' }
+      { x: 0, y: 560, width: 800, height: 40, colorState: 'NEUTRAL', type: 'SOLID' },
+      { x: 280, y: 360, width: 40, height: 200, colorState: 'RED', type: 'SOLID' },
+      { x: 450, y: 440, width: 160, height: 20, colorState: 'GREEN', type: 'SOLID' },
+      { x: 700, y: 480, width: 50, height: 80, colorState: 'BLUE', type: 'GOAL' }
     ]
   });
 
