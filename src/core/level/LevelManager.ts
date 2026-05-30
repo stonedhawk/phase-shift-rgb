@@ -46,11 +46,35 @@ export class LevelManager {
     ]
   });
 
+  // Level 3: Neon Descent - High difficulty descending platform and hazard spikes puzzle stage
+  private static readonly STAGE_3_SCHEMA = JSON.stringify({
+    spawnX: 80,
+    spawnY: 100,
+    platforms: [
+      // Starting Ledge
+      { x: 0, y: 180, width: 160, height: 20, colorState: 'NEUTRAL', type: 'SOLID' },
+      // Hazards covering the floor
+      { x: 100, y: 550, width: 600, height: 30, colorState: 'RED', type: 'HAZARD' },
+      // Stepping stones descending
+      { x: 220, y: 280, width: 100, height: 20, colorState: 'BLUE', type: 'SOLID' },
+      { x: 380, y: 360, width: 100, height: 20, colorState: 'GREEN', type: 'SOLID' },
+      { x: 540, y: 440, width: 100, height: 20, colorState: 'RED', type: 'SOLID' },
+      // Goal platform at bottom right
+      { x: 680, y: 500, width: 120, height: 20, colorState: 'NEUTRAL', type: 'SOLID' },
+      { x: 720, y: 440, width: 50, height: 60, colorState: 'BLUE', type: 'GOAL' }
+    ]
+  });
+
   constructor() {
-    this.levels = [LevelManager.STAGE_1_SCHEMA, LevelManager.STAGE_2_SCHEMA];
+    this.levels = [
+      LevelManager.STAGE_1_SCHEMA,
+      LevelManager.STAGE_2_SCHEMA,
+      LevelManager.STAGE_3_SCHEMA
+    ];
     this.boundsList = [
       { width: 800, height: 600 },
       { width: 800, height: 1200 },
+      { width: 800, height: 600 }
     ];
   }
 
