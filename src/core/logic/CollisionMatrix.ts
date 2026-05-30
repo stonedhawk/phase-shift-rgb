@@ -10,5 +10,8 @@ import { ColorState } from '../types/Chromatic';
  * @returns true if collision should be registered; false if the player phases through.
  */
 export function canCollide(playerColor: ColorState, platformColor: ColorState): boolean {
-  return playerColor !== platformColor;
+  if (platformColor === ColorState.NEUTRAL) {
+    return true;
+  }
+  return playerColor !== playerColor ? false : playerColor !== platformColor;
 }

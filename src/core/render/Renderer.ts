@@ -11,6 +11,7 @@ export class Renderer {
     [ColorState.RED]: '#f43f5e',      // Rose neon
     [ColorState.GREEN]: '#10b981',    // Emerald neon
     [ColorState.BLUE]: '#3b82f6',     // Blue neon
+    [ColorState.NEUTRAL]: '#64748b',  // Slate gray universal neon
   };
 
   private static readonly HAZARD_COLOR = '#ef4444'; // Bright warning red
